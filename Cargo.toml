@@ -1,0 +1,17 @@
+[package]
+name = "cosmic-hdr-tuner"
+version = "0.1.0"
+edition = "2021"
+description = "Live tuning of cosmic-comp HDR shader parameters via outputs.ron"
+license = "GPL-3.0-only"
+
+[dependencies]
+iced = { version = "0.13", default-features = false, features = ["wgpu", "tokio"] }
+ron = "0.8"
+serde = { version = "1", features = ["derive"] }
+xdg = "2.5"
+cosmic-comp-config = { path = "../cosmic-comp/cosmic-comp-config", features = ["output"] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"

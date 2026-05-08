@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=COSMIC HDR Tuner
+GenericName=HDR Display Tuning
+Comment=Live-tune HDR shader parameters for cosmic-comp (Lilypad Cosmic fork)
+Exec=cosmic-hdr-tuner
+Icon=preferences-desktop-display
+Terminal=false
+Categories=Settings;DesktopSettings;Monitor;
+Keywords=hdr;display;color;wide gamut;monitor;tuning;
+StartupNotify=true
+StartupWMClass=cosmic-hdr-tuner
