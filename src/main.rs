@@ -17,18 +17,52 @@ use iced::{Element, Length, Task};
 use std::path::PathBuf;
 
 const REF_WHITE_MIN: u32 = 80;
-const REF_WHITE_MAX: u32 = 1000;
+// 10000 = full PQ peak. Most panels can't actually emit anywhere near that
+// (Tandem OLED ~1000 sustained / ~1500 peak boost), but the math is well
+// defined all the way up — anything past panel ABL ceiling just gets clamped
+// in firmware with no visual benefit, but no harm either. Letting the user
+// dial all the way to 10000 means they can max the panel without artificial
+// software ceilings getting in the way.
+const REF_WHITE_MAX: u32 = 10000;
+// Slider step in nits. With min=80, max=10000, step=25 → ~398 stops, smooth
+// enough but not jittery.
+const REF_WHITE_STEP: u32 = 25;
 const GAMUT_MIN: u8 = 0;
 const GAMUT_MAX: u8 = 100;
 const SAT_MIN: u8 = 50;
 const SAT_MAX: u8 = 200;
 const GAMMA_MIN: u8 = 30;
-const GAMMA_MAX: u8 = 200;
+// Capped at 150% — the hardware-path gamma curve in the shader is half-strength
+// (color_mode=8 dampens the slider deviation by 0.5×), so user-perceived
+// "useful" range lives within 90-130% on this panel; 150 leaves headroom but
+// avoids the slider feeling empty past 150 where extra travel had no benefit.
+const GAMMA_MAX: u8 = 150;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ColorspaceUi {
     Bt2020,
     DciP3,
+}
+
+/// Convert linear-light nits in the PQ reference range (0..=10000) into the
+/// PQ-encoded percentage that the panel will see on the wire. Useful as a
+/// readout for "what fraction of PQ peak am I asking for?" since the slider
+/// itself is in linear nits and the encoded value is what actually reaches
+/// the panel and decides perceived brightness.
+///
+/// SMPTE ST 2084 inverse EOTF (the encoder direction):
+///   Y_norm = nits / 10000
+///   Y_pq   = ((c1 + c2 * Y_norm^m1) / (1 + c3 * Y_norm^m1))^m2
+fn nits_to_pq_percent(nits: u32) -> f64 {
+    const M1: f64 = 0.1593017578125;
+    const M2: f64 = 78.84375;
+    const C1: f64 = 0.8359375;
+    const C2: f64 = 18.8515625;
+    const C3: f64 = 18.6875;
+    let y = (nits as f64 / 10000.0).max(0.0).min(1.0);
+    let ym = y.powf(M1);
+    let v = ((C1 + C2 * ym) / (1.0 + C3 * ym)).max(0.0).powf(M2);
+    v * 100.0
 }
 
 impl std::fmt::Display for ColorspaceUi {
@@ -272,14 +306,22 @@ impl App {
         .align_y(iced::Alignment::Center);
 
         let rw_row = column![
-            text(format!("Reference white: {} nits", self.ref_white)),
+            text(format!(
+                "Reference white: {:.1}% PQ",
+                nits_to_pq_percent(self.ref_white)
+            )),
             slider(
                 REF_WHITE_MIN..=REF_WHITE_MAX,
                 self.ref_white,
                 Message::RefWhite,
             )
-            .step(5u32),
-            text("80=dim cinema · 203=BT.2408 · 300=desktop · 525=panel peak · >525 panel ABL clamps but may push hotter").size(12),
+            .step(REF_WHITE_STEP),
+            text(
+                "How bright sRGB white sits on the wire. PQ is non-linear: \
+                ~50%=100nits, ~58%=203nits (BT.2408), ~75%=1000nits, 100%=10000nits. \
+                Panel ABL clamps anything above its peak — no harm, just no extra brightness."
+            )
+            .size(12),
         ]
         .spacing(4);
 
@@ -305,7 +347,7 @@ impl App {
 
         let mg_row = column![
             text(format!("Midtone gamma: {}%", self.midtone_gamma)),
-            slider(GAMMA_MIN..=GAMMA_MAX, self.midtone_gamma, Message::MidtoneGamma).step(5u8),
+            slider(GAMMA_MIN..=GAMMA_MAX, self.midtone_gamma, Message::MidtoneGamma).step(1u8),
             text("100 = neutral · 130-160 = HDR punch (darkens midtones, more contrast) · <100 = lifts midtones (looks washed)")
                 .size(12),
         ]
@@ -345,14 +387,20 @@ impl App {
 }
 
 fn main() -> iced::Result {
+    // Wayland app_id has to match the basename of the .desktop file
+    // (cosmic-hdr-tuner.desktop) for the COSMIC dock to associate the
+    // running window with its launcher entry. Without this, iced defaults
+    // application_id to the empty string and the dock can't resolve a
+    // minimized toplevel back to the launcher icon — clicking the icon
+    // does nothing and the user has to use Workspace Overview to find it.
+    let mut window = iced::window::Settings::default();
+    window.size = iced::Size::new(720.0, 760.0);
+    window.platform_specific.application_id = "cosmic-hdr-tuner".into();
+
     iced::application(App::title, App::update, App::view)
         // Dark theme (matches the COSMIC dark default — and the panel is
         // typically OLED HDR where light themes burn the room).
         .theme(|_| iced::Theme::Dark)
-        // Window sized to fit master toggle + colorspace dropdown + 4 sliders
-        // (ref-white, gamut, saturation, midtone) + test-pattern checkbox +
-        // save button + status, all with descriptive subtitles. iced will
-        // still let user resize.
-        .window_size((720.0, 760.0))
+        .window(window)
         .run_with(App::new)
 }
