@@ -17,13 +17,13 @@ use iced::{Element, Length, Task};
 use std::path::PathBuf;
 
 const REF_WHITE_MIN: u32 = 80;
-const REF_WHITE_MAX: u32 = 600;
+const REF_WHITE_MAX: u32 = 1000;
 const GAMUT_MIN: u8 = 0;
 const GAMUT_MAX: u8 = 100;
 const SAT_MIN: u8 = 50;
 const SAT_MAX: u8 = 200;
 const GAMMA_MIN: u8 = 30;
-const GAMMA_MAX: u8 = 150;
+const GAMMA_MAX: u8 = 200;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ColorspaceUi {
@@ -279,7 +279,7 @@ impl App {
                 Message::RefWhite,
             )
             .step(5u32),
-            text("80 = dim cinema · 203 = BT.2408 · 300 = desktop · 500 = peak").size(12),
+            text("80=dim cinema · 203=BT.2408 · 300=desktop · 525=panel peak · >525 panel ABL clamps but may push hotter").size(12),
         ]
         .spacing(4);
 
