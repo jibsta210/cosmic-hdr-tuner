@@ -32,11 +32,17 @@ const GAMUT_MAX: u8 = 100;
 const SAT_MIN: u8 = 50;
 const SAT_MAX: u8 = 200;
 const GAMMA_MIN: u8 = 30;
-// Capped at 150% — the hardware-path gamma curve in the shader is half-strength
-// (color_mode=8 dampens the slider deviation by 0.5×), so user-perceived
-// "useful" range lives within 90-130% on this panel; 150 leaves headroom but
-// avoids the slider feeling empty past 150 where extra travel had no benefit.
-const GAMMA_MAX: u8 = 150;
+// Path B's path_b_active=1 postprocess skips the sRGB-decode + matrix +
+// ref_white_scale pre-stages (already done per-surface), so user-perceived
+// gamma is applied directly to the BT.2020-linear absolute-luminance values.
+// SDR-white sits at PQ-aligned 1.0 (= ref_white/10000 = 1.0 at ref_white=10000),
+// so a higher gamma compresses midtones harder than the hardware path's
+// 0.5× dampened curve allowed. Bumped to 300% to give enough headroom for
+// "punchy" contrast (50% gray at ~25 nits, white at panel peak ≈ 22:1 ratio).
+// Hardware path / Phase 2A.2 effectively gets gamma * 0.5 dampening so its
+// useful range stays in 30-160; users will discover via the slider that
+// path B needs higher values. Capped at u8::MAX-5 = 250 (= 2.5×).
+const GAMMA_MAX: u8 = 250;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ColorspaceUi {
